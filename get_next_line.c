@@ -1,106 +1,98 @@
 #include "get_next_line.h"
-#include <stdio.h>
 
-char	*ft_strncat(char *dest, const char *src, size_t n)
+static char	*read_fd(int fd, char *buffer)
 {
-	size_t	i;
-	size_t	j;
+	char	*local_buffer;
+	int		bytes_read;
 
-	if (!dest || !src || n == 0)
-		return (dest);
-	i = 0;
-	while (dest[i])
-		i++;
-	j = 0;
-	while (src[j] && j < n)
+	local_buffer = malloc(sizeof(char) * (BUFFER_SIZE + 1));
+	if (!local_buffer)
+		return (NULL);
+	bytes_read = 1;
+	while (!ft_strchr(buffer, '\n') && bytes_read != 0)
 	{
-		dest[i + j] = src[j];
-		j++;
+		bytes_read = read(fd, local_buffer, BUFFER_SIZE);
+		if (bytes_read == -1)
+		{
+			free(local_buffer);
+			free(buffer);
+			return (NULL);
+		}
+		local_buffer[bytes_read] = '\0';
+		buffer = ft_strjoin(buffer, local_buffer);
 	}
-	dest[i + j] = '\0';
-	return (dest);
+	free(local_buffer);
+	return (buffer);
 }
 
-static size_t	get_nl_idx(char *s)
+static char	*extract_line(char *buffer)
 {
-	size_t	i;
+	char	*line;
+	int		i;
 
 	i = 0;
-	while (s[i] && s[i] != '\n')
+	if (!buffer[i])
+		return (NULL);
+	while (buffer[i] && buffer[i] != '\n')
 		i++;
-	if (s[i] == '\n')
-		i++;
-	return (i);
-}
-
-static char	*process_str(t_list **list, char *line)
-{
-	t_list	*head;
-	char	*tmp;
-
-	head = *list;
-	line = malloc(sizeof(char) * (len(list) + 1));
+	line = malloc(sizeof(char) * (i + (buffer[i] == '\n') + 1));
 	if (!line)
 		return (NULL);
-	line[0] = '\0';
-	while (*list && !find_chr((*list)->content))
+	i = 0;
+	while (buffer[i] && buffer[i] != '\n')
 	{
-		ft_strncat(line, (*list)->content, (size_t)-1);
-		pop_front(list, 1);
+		line[i] = buffer[i];
+		i++;
 	}
-	if (*list && find_chr((*list)->content))
+	if (buffer[i] == '\n')
 	{
-		head = *list;
-		ft_strncat(line, head->content, get_nl_idx(head->content));
-		tmp = ft_strdup(head->content + get_nl_idx(head->content));
-		free(head->content);
-		head->content = tmp;
-		if (head->content && head->content[0] == '\0')
-			pop_front(list, 1);
+		line[i] = buffer[i];
+		i++;
 	}
+	line[i] = '\0';
 	return (line);
 }
 
-static char	*read_file(t_list **list, char *buffer, char *line, int fd)
+static char	*clean_buffer(char *buffer)
 {
-	ssize_t	nbyte;
-	t_list	*head;
+	char	*new_buffer;
+	int		i;
+	int		j;
 
-	nbyte = read(fd, buffer, BUFFER_SIZE);
-	while (nbyte > 0)
+	i = 0;
+	while (buffer[i] && buffer[i] != '\n')
+		i++;
+	if (!buffer[i])
 	{
-		buffer[nbyte] = '\0';
-		if (!*list)
-			*list = node_init(list, buffer);
-		else
-		{
-			head = *list;
-			while (head->next != NULL)
-				head = head->next;
-			head->next = node_init(list, buffer);
-		}
-		if (find_chr(buffer))
-			break ;
-		nbyte = read(fd, buffer, BUFFER_SIZE);
+		free(buffer);
+		return (NULL);
 	}
-	return (process_str(list, line));
+	new_buffer = malloc(sizeof(char) * (ft_strlen(buffer) - i + 1));
+	if (!new_buffer)
+	{
+		free(buffer);
+		return (NULL);
+	}
+	i++;
+	j = 0;
+	while (buffer[i])
+		new_buffer[j++] = buffer[i++];
+	new_buffer[j] = '\0';
+	free(buffer);
+	return (new_buffer);
 }
 
 char	*get_next_line(int fd)
 {
-	static t_list	*head;
-	char			*buffer;
+	static char		*buffer;
 	char			*line;
 
 	if (fd < 0 || BUFFER_SIZE <= 0)
-		return (pop_front(&head, 2), NULL);
-	line = NULL;
-	buffer = (char *)malloc(sizeof(char) * ((size_t)BUFFER_SIZE + 1));
+		return (NULL);
+	buffer = read_fd(fd, buffer);
 	if (!buffer)
 		return (NULL);
-	line = read_file(&head, buffer, line, fd);
-	free(buffer);
-	if (!line && head)
-		pop_front(&head, 2);
+	line = extract_line(buffer);
+	buffer = clean_buffer(buffer);
 	return (line);
 }
